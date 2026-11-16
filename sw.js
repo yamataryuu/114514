@@ -1,9 +1,11 @@
 /* 像素割草 · 离线缓存：首次打开网站后，断网也能继续玩 */
-const CACHE = 'pixel-survivors-v1';
+const CACHE = 'pixel-survivors-v2';
 const ASSETS = [
   './',
   './index.html',
+  './src/record-store.js',
   './manifest.webmanifest',
+  './favicon.ico',
   './icon-192.png',
   './icon-512.png'
 ];

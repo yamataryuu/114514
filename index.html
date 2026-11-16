@@ -66,14 +66,16 @@
     <button id="btnPause" type="button">⏸ 暂停</button>
     <button id="btnMute" type="button">🔊 音效</button>
     <button id="btnFull" type="button">⛶ 全屏</button>
+    <button id="btnRecords" type="button">🏆 战绩簿</button>
   </div>
   <p class="tip">
     <kbd>W A S D</kbd> / 方向键 / 左下角摇杆移动 · 自动瞄准射击 · 拾取青色经验宝石升级 · <kbd>1 2 3</kbd> 选强化<br>
-    <kbd>P</kbd> 暂停 · <kbd>M</kbd> 静音 · <kbd>空格</kbd> 开始 / 重开 ·
+    <kbd>P</kbd> 暂停 · <kbd>M</kbd> 静音 · <kbd>R</kbd> 战绩簿 · <kbd>T</kbd> 重复提交验收 · <kbd>空格</kbd> 开始 / 重开 ·
     调试参数：<kbd>?wave=10</kbd> 直达 Boss · <kbd>?fast=1</kbd> 加速刷怪 · <kbd>?god=1</kbd> 无敌
   </p>
 </div>
 <div id="rotate">↻ 横屏体验更佳（竖屏也能直接玩）</div>
+<script src="src/record-store.js"></script>
 <script>
 (() => {
 'use strict';
@@ -125,6 +127,11 @@ function beep(f, d, type = 'square', v = 0.025) {
 let state, T, p, wave, waveState, interT, spawnQueue, spawnT, spawnGap;
 let enemies, bullets, ebullets, gems, particles, texts, boss, bossDead, bossPhase, phaseT, phaseIdx, ringGapIdx;
 let shake, kills, banner, bannerT, upgrades, xpFlash;
+/* 战绩簿：字段定义 docs/schema.md，接口约定 docs/api.md */
+const RS = window.RecordStore || null;
+const recStore = RS ? RS.createStore() : null;
+let recPanel = false, recMsg = null, recMsgT = 0, runSaved = false, pickedUpgrades = [];
+function recNotice(res) { recMsg = res; recMsgT = 4.5; return res; }
 
 function reset() {
   state = 'title'; T = 0;
@@ -136,6 +143,7 @@ function reset() {
   enemies = []; bullets = []; ebullets = []; gems = []; particles = []; texts = [];
   boss = null; bossDead = false; bossPhase = 'rest'; phaseT = 0; phaseIdx = 0; ringGapIdx = 0;
   shake = 0; kills = 0; banner = ''; bannerT = 0; upgrades = []; xpFlash = 0;
+  runSaved = false; pickedUpgrades = []; recPanel = false;
 }
 
 /* ---------------- 波次配置：难度循序渐进 ---------------- */
@@ -227,7 +235,7 @@ function hurt(n) {
   p.hp -= n; p.iframe = 0.85; shake = 7;
   burst(p.x, p.y, '#ff5d7a', 10, 80);
   beep(150, 0.18, 'sawtooth', 0.05);
-  if (p.hp <= 0) { p.hp = 0; state = 'gameover'; beep(70, 0.6, 'sawtooth', 0.06); }
+  if (p.hp <= 0) { p.hp = 0; state = 'gameover'; beep(70, 0.6, 'sawtooth', 0.06); saveCurrentRun(); }
 }
 
 function killEnemy(e) {
@@ -248,15 +256,15 @@ function makeGem(x, y, v) { return { x, y, v, t: rnd(0, TAU) }; }
 
 /* ---------------- 升级 ---------------- */
 const UPGRADE_POOL = [
-  { name: '锐化弹头', desc: '子弹伤害 +35%', apply: () => { p.dmg = Math.round(p.dmg * 1.35); } },
-  { name: '急速扳机', desc: '射速 +18%', apply: () => { p.fireRate *= 0.82; } },
-  { name: '多重射击', desc: '每次多发射 1 发', apply: () => { p.multishot = Math.min(6, p.multishot + 1); } },
-  { name: '疾风靴', desc: '移动速度 +12%', apply: () => { p.speed *= 1.12; } },
-  { name: '强化护甲', desc: '最大生命 +2 并回满 2', apply: () => { p.maxhp += 2; p.hp = Math.min(p.maxhp, p.hp + 2); } },
-  { name: '穿甲弹', desc: '子弹可多穿透 1 个敌人', apply: () => { p.pierce += 1; } },
-  { name: '磁力立场', desc: '经验拾取范围 +24', apply: () => { p.magnet += 24; } },
-  { name: '急救包', desc: '立即回复 3 点生命', apply: () => { p.hp = Math.min(p.maxhp, p.hp + 3); } },
-  { name: '高速弹', desc: '子弹速度 +25%', apply: () => { p.bspeed *= 1.25; } }
+  { id: 'dmg',          name: '锐化弹头', desc: '子弹伤害 +35%', apply: () => { p.dmg = Math.round(p.dmg * 1.35); } },
+  { id: 'rate',         name: '急速扳机', desc: '射速 +18%', apply: () => { p.fireRate *= 0.82; } },
+  { id: 'multi',        name: '多重射击', desc: '每次多发射 1 发', apply: () => { p.multishot = Math.min(6, p.multishot + 1); } },
+  { id: 'speed',        name: '疾风靴', desc: '移动速度 +12%', apply: () => { p.speed *= 1.12; } },
+  { id: 'armor',        name: '强化护甲', desc: '最大生命 +2 并回满 2', apply: () => { p.maxhp += 2; p.hp = Math.min(p.maxhp, p.hp + 2); } },
+  { id: 'pierce',       name: '穿甲弹', desc: '子弹可多穿透 1 个敌人', apply: () => { p.pierce += 1; } },
+  { id: 'magnet',       name: '磁力立场', desc: '经验拾取范围 +24', apply: () => { p.magnet += 24; } },
+  { id: 'heal',         name: '急救包', desc: '立即回复 3 点生命', apply: () => { p.hp = Math.min(p.maxhp, p.hp + 3); } },
+  { id: 'bullet_speed', name: '高速弹', desc: '子弹速度 +25%', apply: () => { p.bspeed *= 1.25; } }
 ];
 function rollUpgrades() {
   const pool = UPGRADE_POOL.slice();
@@ -270,9 +278,36 @@ function levelUp() {
 }
 function chooseUpgrade(i) {
   if (state !== 'levelup' || !upgrades[i]) return;
-  upgrades[i].apply(); state = 'playing';
+  upgrades[i].apply(); pickedUpgrades.push(upgrades[i].id); state = 'playing';
   floatText(p.x, p.y - 12, 'LV UP!', '#ffe27a');
   burst(p.x, p.y, '#ffe27a', 16, 90);
+}
+
+/* ---------------- 战绩提交（主路径最关键一步，约定见 docs/api.md） ---------------- */
+function saveCurrentRun() {
+  if (runSaved || !recStore) return null;
+  runSaved = true;
+  const res = recStore.submit({
+    playerName: '玩家',
+    waveReached: clamp(Math.max(1, wave), 1, 10),
+    result: state === 'victory' ? 'victory' : 'defeat',
+    kills: Math.min(9999, kills),
+    level: clamp(p.lvl, 1, 99),
+    hpLeft: clamp(p.hp, 0, 30),
+    maxhp: clamp(p.maxhp, 1, 30),
+    upgrades: pickedUpgrades.slice(0, 20),
+    durationSec: Math.min(7200, Math.round(T * 10) / 10),
+    source: god ? 'debug' : 'web'
+  });
+  return recNotice(res);
+}
+function repeatLastSubmission() {
+  if (!recStore) return recNotice({ ok: false, code: 'STORAGE_FAILED', hint: '提交失败：本机存储不可用，战绩未写入。' });
+  const rows = recStore.list();
+  if (!rows.length) return recNotice({ ok: false, code: 'NOT_FOUND', mark: '未收录',
+    hint: '查询失败：未收录任何战绩，请先打完一局再重试。' });
+  const last = rows[rows.length - 1];
+  return recNotice(recStore.submit(JSON.parse(JSON.stringify(last))));  // 同一 runId → 唯一冲突
 }
 
 /* ---------------- Boss 弹幕：大量但始终留有躲避空间 ----------------
@@ -471,7 +506,7 @@ function update(dt) {
   /* 波次推进 */
   if (waveState === 'fighting' && spawnQueue.length === 0 && enemies.length === 0 && !boss) {
     if (wave >= 10) {
-      if (bossDead) { state = 'victory'; banner = ''; beep(523, 0.2, 'square', 0.05); setTimeout(() => beep(784, 0.35, 'square', 0.05), 180); }
+      if (bossDead) { state = 'victory'; banner = ''; saveCurrentRun(); beep(523, 0.2, 'square', 0.05); setTimeout(() => beep(784, 0.35, 'square', 0.05), 180); }
     } else {
       waveState = 'intermission'; interT = FAST ? 0.6 : 3.0;
       p.hp = Math.min(p.maxhp, p.hp + 1);          // 波间回 1 血
@@ -655,6 +690,52 @@ function drawJoystick() {
   ctx.restore();
 }
 
+function drawRecordsPanel() {
+  const rows = recStore ? recStore.list() : [];
+  ctx.fillStyle = 'rgba(6,8,18,0.92)'; ctx.fillRect(0, 0, W, H);
+  ctx.textAlign = 'center'; ctx.font = 'bold 30px ' + FM; ctx.fillStyle = '#ffe27a';
+  ctx.fillText('RECORDS  ·  战绩簿', W / 2, 96);
+  ctx.font = '14px ' + FZ; ctx.fillStyle = '#9aa4dc';
+  ctx.fillText('共 ' + rows.length + ' 条 · 存储于本机 ' + (recStore ? recStore.label : '不可用'), W / 2, 158);
+  if (!rows.length) {
+    ctx.font = '16px ' + FZ; ctx.fillStyle = '#cfd6ff';
+    ctx.fillText('暂无战绩，打完一局会自动保存。', W / 2, 270);
+  } else {
+    ctx.textAlign = 'left'; ctx.font = 'bold 13px ' + FM; ctx.fillStyle = '#6ee7a0';
+    ctx.fillText('RUN ID                      WAVE   RESULT    KILLS   LV   HP      TIME', 96, 198);
+    ctx.strokeStyle = '#39406e'; ctx.beginPath(); ctx.moveTo(96, 208); ctx.lineTo(864, 208); ctx.stroke();
+    const recent = rows.slice(-6);
+    recent.forEach((r, i) => {
+      const y = 234 + i * 36;
+      ctx.font = '13px ' + FM;
+      ctx.fillStyle = r.result === 'victory' ? '#8bffb0' : '#cfd6ff';
+      ctx.fillText(
+        r.runId.padEnd(24) + '  ' + String(r.waveReached).padStart(2) + '      ' +
+        r.result.padEnd(8) + '  ' + String(r.kills).padStart(4) + '    ' +
+        String(r.level).padStart(2) + '   ' + String(r.hpLeft).padStart(2) + '/' + String(r.maxhp).padEnd(2) +
+        '   ' + String(r.durationSec).padStart(5) + 's', 96, y);
+    });
+  }
+  ctx.textAlign = 'center'; ctx.font = '13px ' + FZ; ctx.fillStyle = '#8b93c4';
+  ctx.fillText('按 R 返回 · 按 T 重复提交最后一条（验收唯一性约束） · 重开网页数据仍在', W / 2, 520);
+}
+
+function drawRecNotice() {
+  if (!recMsg || recMsgT <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = clamp(recMsgT, 0, 1);
+  const good = recMsg.ok;
+  const text = recMsg.hint || '';
+  ctx.font = 'bold 15px ' + FZ;
+  const w = Math.min(W - 40, ctx.measureText(text).width + 44);
+  const x = (W - w) / 2, y = 96;
+  ctx.fillStyle = 'rgba(9,11,26,0.95)'; ctx.fillRect(x, y, w, 40);
+  ctx.fillStyle = good ? '#4be0c4' : '#ff5d7a'; ctx.fillRect(x, y, 4, 40);
+  ctx.textAlign = 'center'; ctx.fillStyle = good ? '#8bffb0' : '#ffb3c1';
+  ctx.fillText(text, W / 2, y + 26);
+  ctx.restore();
+}
+
 function overlay(title, sub, color) {
   ctx.fillStyle = 'rgba(6,8,18,0.82)'; ctx.fillRect(0, 0, W, H);
   ctx.textAlign = 'center';
@@ -694,7 +775,8 @@ function render() {
   const sx = shake > 0 ? rnd(-shake, shake) : 0, sy = shake > 0 ? rnd(-shake, shake) : 0;
   ctx.drawImage(world, sx, sy, W, H);
   drawHUD();
-  if (state === 'title') overlay('PIXEL SURVIVORS',
+  if (recPanel) drawRecordsPanel();
+  else if (state === 'title') overlay('PIXEL SURVIVORS',
     '像素割草 · 10 波敌人 · 自动射击 · WASD / 摇杆走位\n红色追击怪贴身扣血，紫色弹幕怪远程开火\n第 10 波 Boss 环形弹幕留有缺口，抓停火窗口穿出去', '#ffe27a');
   else if (state === 'levelup') drawUpgradeCards();
   else if (state === 'paused') overlay('PAUSED', '点击「继续」按钮 / 按 P 继续游戏', '#8be9fd');
@@ -702,6 +784,7 @@ function render() {
     '倒在第 ' + wave + ' 波 · 击杀 ' + kills + ' · 等级 ' + p.lvl + '\n点击屏幕 / 按空格再来一局', '#ff6b8f');
   else if (state === 'victory') overlay('VICTORY!',
     '十波全清，Boss 已被击破！\n击杀 ' + kills + ' · 等级 ' + p.lvl + ' · 剩余生命 ' + p.hp + '\n点击屏幕 / 按空格再玩一次', '#8bffb0');
+  drawRecNotice();
 }
 
 /* ---------------- 输入 ---------------- */
@@ -715,6 +798,8 @@ window.addEventListener('keydown', e => {
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', '1', '2', '3'].indexOf(k) !== -1) e.preventDefault();
   if (keys.has(k) && k !== ' ') return;
   keys.add(k);
+  if (k === 'r') { recPanel = !recPanel; return; }              // 战绩簿
+  if (k === 't') { repeatLastSubmission(); return; }            // 重复提交验收
   if (state === 'title' || state === 'gameover' || state === 'victory') { if (k === ' ') startGame(); return; }
   if (state === 'levelup') { if (k === '1' || k === '2' || k === '3') chooseUpgrade(+k - 1); return; }
   if (k === 'p') { state = state === 'paused' ? 'playing' : 'paused'; return; }
@@ -726,6 +811,7 @@ window.addEventListener('blur', () => keys.clear());
 cv.addEventListener('click', e => {
   const r = cv.getBoundingClientRect();
   const x = (e.clientX - r.left) * (W / r.width), y = (e.clientY - r.top) * (H / r.height);
+  if (recPanel) { recPanel = false; return; }
   if (state === 'title' || state === 'gameover' || state === 'victory') { startGame(); return; }
   if (state === 'paused') { state = 'playing'; return; }
   if (state === 'levelup') {
@@ -769,16 +855,20 @@ window.addEventListener('blur', () => { stick.active = false; stick.id = null; s
 const btnPause = document.getElementById('btnPause');
 const btnMute = document.getElementById('btnMute');
 const btnFull = document.getElementById('btnFull');
+const btnRecords = document.getElementById('btnRecords');
 function syncButtons() {
   const s = state === 'paused' ? '▶ 继续' : '⏸ 暂停';
   if (btnPause.textContent !== s) btnPause.textContent = s;
   const m = muted ? '🔇 静音中' : '🔊 音效';
   if (btnMute.textContent !== m) btnMute.textContent = m;
+  const r = recPanel ? '✕ 关闭战绩' : '🏆 战绩簿';
+  if (btnRecords.textContent !== r) btnRecords.textContent = r;
 }
 btnPause.addEventListener('click', () => {
   if (state === 'playing' || state === 'paused') state = state === 'paused' ? 'playing' : 'paused';
 });
 btnMute.addEventListener('click', () => { muted = !muted; });
+btnRecords.addEventListener('click', () => { recPanel = !recPanel; });
 btnFull.addEventListener('click', () => {
   const el = document.documentElement;
   if (!document.fullscreenElement) (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
@@ -798,6 +888,7 @@ function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.033); last = now;
   if (state === 'playing') update(dt);
   else T += dt;
+  if (recMsgT > 0) { recMsgT -= dt; if (recMsgT <= 0) recMsg = null; }
   render();
   requestAnimationFrame(loop);
 }
@@ -829,6 +920,12 @@ window.__game = {
   setStick(dx, dy) { stick.active = true; stick.dx = dx; stick.dy = dy; },
   clearStick() { stick.active = false; stick.id = null; stick.dx = 0; stick.dy = 0; },
   stickInfo() { return { active: stick.active, dx: +stick.dx.toFixed(3), dy: +stick.dy.toFixed(3), touchUI: isTouchUI() }; },
+  submitRaw(input) { return recNotice(recStore.submit(input)); },
+  records() { return recStore.list(); },
+  lastSave() { return recMsg ? { ok: recMsg.ok, code: recMsg.code, hint: recMsg.hint } : null; },
+  repeatLast() { return repeatLastSubmission(); },
+  showRecords(v) { recPanel = !!v; },
+  waveCatalog(n) { return recStore.wave(n); },
   hurt: hurt,
   render: render
 };

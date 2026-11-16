@@ -1,0 +1,21 @@
+[
+  {
+    "runId": "R20261116105258-243d",
+    "schemaVersion": 1,
+    "createdAt": "2026-11-16T10:52:58.899Z",
+    "playerName": "元宝",
+    "waveReached": 10,
+    "result": "victory",
+    "kills": 86,
+    "level": 7,
+    "hpLeft": 5,
+    "maxhp": 10,
+    "upgrades": [
+      "dmg",
+      "multi",
+      "rate"
+    ],
+    "durationSec": 142.6,
+    "source": "web"
+  }
+]
