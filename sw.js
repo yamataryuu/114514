@@ -1,5 +1,5 @@
 /* 像素割草 · 离线缓存：首次打开网站后，断网也能继续玩 */
-const CACHE = 'pixel-survivors-v2';
+const CACHE = 'pixel-survivors-v3';
 const ASSETS = [
   './',
   './index.html',

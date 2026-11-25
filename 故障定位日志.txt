@@ -1,0 +1,6 @@
+[DBG] adapter label = memory
+[DBG] save = {"ok":true,"code":"OK","hint":"战绩已保存：R20261125130524-9c40，重开网页仍可在「战绩簿」查看。"}
+[DBG] before reload records=1 localStorage=null
+[DBG] after reload records=0 localStorage=null
+[DBG] adapter label = memory
+[DBG] pageerror=0

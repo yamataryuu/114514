@@ -34,6 +34,11 @@
     background: #171c38; border: 1px solid #4a5389; border-radius: 6px;
     padding: 7px 12px; min-height: 34px; }
   button:active { background: #2b3464; }
+  .nick { font-size: 12px; color: #9aa4dc; display: inline-flex; align-items: center; gap: 5px; }
+  .nick input { font-family: inherit; font-size: 12px; width: 96px; min-height: 28px;
+    color: #e8ecff; background: #171c38; border: 1px solid #4a5389;
+    border-radius: 5px; padding: 3px 7px; outline: none; }
+  .nick input:focus { border-color: #4be0c4; }
   .tip { margin: 0; font-size: 11px; color: #7f88b8; text-align: center;
     line-height: 1.6; flex: none; }
   kbd { background: #20264a; border: 1px solid #4a5389; border-radius: 3px;
@@ -63,10 +68,13 @@
   <h1>像素割草 · 十波幸存者</h1>
   <div id="stage"><canvas id="game" width="960" height="600"></canvas></div>
   <div class="bar">
+    <label class="nick">昵称 <input id="nick" type="text" maxlength="12" value="玩家"
+      autocomplete="off" spellcheck="false" aria-label="玩家昵称"></label>
     <button id="btnPause" type="button">⏸ 暂停</button>
     <button id="btnMute" type="button">🔊 音效</button>
     <button id="btnFull" type="button">⛶ 全屏</button>
     <button id="btnRecords" type="button">🏆 战绩簿</button>
+    <button id="btnClear" type="button">🗑 清空战绩</button>
   </div>
   <p class="tip">
     <kbd>W A S D</kbd> / 方向键 / 左下角摇杆移动 · 自动瞄准射击 · 拾取青色经验宝石升级 · <kbd>1 2 3</kbd> 选强化<br>
@@ -131,6 +139,8 @@ let shake, kills, banner, bannerT, upgrades, xpFlash;
 const RS = window.RecordStore || null;
 const recStore = RS ? RS.createStore() : null;
 let recPanel = false, recMsg = null, recMsgT = 0, runSaved = false, pickedUpgrades = [];
+let playerName = '玩家', clearArmed = false, clearArmT = 0;
+const NAME_RE = /^[\u4e00-\u9fa5A-Za-z0-9_]{1,12}$/;
 function recNotice(res) { recMsg = res; recMsgT = 4.5; return res; }
 
 function reset() {
@@ -288,7 +298,7 @@ function saveCurrentRun() {
   if (runSaved || !recStore) return null;
   runSaved = true;
   const res = recStore.submit({
-    playerName: '玩家',
+    playerName: playerName,
     waveReached: clamp(Math.max(1, wave), 1, 10),
     result: state === 'victory' ? 'victory' : 'defeat',
     kills: Math.min(9999, kills),
@@ -702,7 +712,7 @@ function drawRecordsPanel() {
     ctx.fillText('暂无战绩，打完一局会自动保存。', W / 2, 270);
   } else {
     ctx.textAlign = 'left'; ctx.font = 'bold 13px ' + FM; ctx.fillStyle = '#6ee7a0';
-    ctx.fillText('RUN ID                      WAVE   RESULT    KILLS   LV   HP      TIME', 96, 198);
+    ctx.fillText('RUN ID                      WAVE   RESULT    KILLS   LV   HP      TIME     NAME', 96, 198);
     ctx.strokeStyle = '#39406e'; ctx.beginPath(); ctx.moveTo(96, 208); ctx.lineTo(864, 208); ctx.stroke();
     const recent = rows.slice(-6);
     recent.forEach((r, i) => {
@@ -713,7 +723,7 @@ function drawRecordsPanel() {
         r.runId.padEnd(24) + '  ' + String(r.waveReached).padStart(2) + '      ' +
         r.result.padEnd(8) + '  ' + String(r.kills).padStart(4) + '    ' +
         String(r.level).padStart(2) + '   ' + String(r.hpLeft).padStart(2) + '/' + String(r.maxhp).padEnd(2) +
-        '   ' + String(r.durationSec).padStart(5) + 's', 96, y);
+        '   ' + String(r.durationSec).padStart(5) + 's   ' + r.playerName, 96, y);
     });
   }
   ctx.textAlign = 'center'; ctx.font = '13px ' + FZ; ctx.fillStyle = '#8b93c4';
@@ -789,12 +799,24 @@ function render() {
 
 /* ---------------- 输入 ---------------- */
 function startGame() {
+  const el = document.getElementById('nick');
+  const raw = (el ? el.value : '').trim();
+  if (!NAME_RE.test(raw)) {
+    return recNotice({ ok: false, code: 'OUT_OF_RANGE',
+      hint: '开局失败：昵称需 1–12 位中文 / 字母 / 数字 / 下划线，请修改后再开始。' });
+  }
+  playerName = raw;                       // 真实昵称贯通到 RunRecord.playerName
   reset(); state = 'playing';
   if (START_WAVE > 1) startWave(START_WAVE);
   else { wave = 0; waveState = 'intermission'; interT = FAST ? 0.4 : 1.6; }
+  return recNotice({ ok: true, code: 'OK', hint: '开局成功：昵称「' + playerName + '」将写入本局战绩。' });
 }
 window.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
+  if (e.target && e.target.tagName === 'INPUT') {   // 昵称框聚焦时也能开局
+    if (k === ' ' || k === 'enter') { e.preventDefault(); startGame(); e.target.blur(); }
+    return;
+  }
   if ([' ', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', '1', '2', '3'].indexOf(k) !== -1) e.preventDefault();
   if (keys.has(k) && k !== ' ') return;
   keys.add(k);
@@ -856,6 +878,8 @@ const btnPause = document.getElementById('btnPause');
 const btnMute = document.getElementById('btnMute');
 const btnFull = document.getElementById('btnFull');
 const btnRecords = document.getElementById('btnRecords');
+const btnClear = document.getElementById('btnClear');
+const BACKUP_KEY = 'pixel_survivors_records_backup_v1';
 function syncButtons() {
   const s = state === 'paused' ? '▶ 继续' : '⏸ 暂停';
   if (btnPause.textContent !== s) btnPause.textContent = s;
@@ -863,12 +887,26 @@ function syncButtons() {
   if (btnMute.textContent !== m) btnMute.textContent = m;
   const r = recPanel ? '✕ 关闭战绩' : '🏆 战绩簿';
   if (btnRecords.textContent !== r) btnRecords.textContent = r;
+  const c = clearArmed ? '⚠ 再点一次确认' : '🗑 清空战绩';
+  if (btnClear.textContent !== c) btnClear.textContent = c;
 }
 btnPause.addEventListener('click', () => {
   if (state === 'playing' || state === 'paused') state = state === 'paused' ? 'playing' : 'paused';
 });
 btnMute.addEventListener('click', () => { muted = !muted; });
 btnRecords.addEventListener('click', () => { recPanel = !recPanel; });
+btnClear.addEventListener('click', () => {
+  if (!clearArmed) {
+    clearArmed = true; clearArmT = 5;
+    recNotice({ ok: true, code: 'OK', hint: '清空需二次确认：5 秒内再点一次；将先备份到本机。' });
+    return;
+  }
+  clearArmed = false;
+  const rows = recStore.list();
+  try { localStorage.setItem(BACKUP_KEY, JSON.stringify(rows)); } catch (e) {}
+  recStore.clear();
+  recNotice({ ok: true, code: 'OK', hint: '已备份 ' + rows.length + ' 条到本机并清空战绩簿。' });
+});
 btnFull.addEventListener('click', () => {
   const el = document.documentElement;
   if (!document.fullscreenElement) (el.requestFullscreen || el.webkitRequestFullscreen || (() => {})).call(el);
@@ -889,6 +927,7 @@ function loop(now) {
   if (state === 'playing') update(dt);
   else T += dt;
   if (recMsgT > 0) { recMsgT -= dt; if (recMsgT <= 0) recMsg = null; }
+  if (clearArmed) { clearArmT -= dt; if (clearArmT <= 0) clearArmed = false; }
   render();
   requestAnimationFrame(loop);
 }
@@ -915,6 +954,7 @@ window.__game = {
   },
   spawn(type, x, y) { spawnEnemy(type, x, y); },
   giveXp(n) { p.xp = Math.min(p.xp + n, p.xpNeed); if (p.xp >= p.xpNeed) levelUp(); },
+  pickUpgrade(i) { chooseUpgrade(i || 0); },
   ebulletAtPlayer() { pushEBullet(p.x, p.y, 0, 0, 0); },
   testRing() { ebullets = []; if (!boss) return []; bossRing(boss); return ebullets.map(b => Math.atan2(b.vy, b.vx)); },
   setStick(dx, dy) { stick.active = true; stick.dx = dx; stick.dy = dy; },

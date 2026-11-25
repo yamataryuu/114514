@@ -9,16 +9,23 @@ site/
 ├── src/
 │   └── record-store.js         ← 战绩数据对象、字段校验、存储适配器
 ├── docs/
-│   ├── schema.md               ← 数据对象与字段表（课题第 1 问）
-│   ├── api.md                  ← 核心接口约定（课题第 2 问）
+│   ├── schema.md               ← 数据对象与字段表
+│   ├── api.md                  ← 核心接口约定
 │   ├── provenance.md           ← 产物与输入追溯
-│   └── 实测报告.md             ← 实测结果（课题第 3 问）
+│   ├── 实测报告.md             ← 实测结果
+│   ├── 通检记录.txt            ← 本期 9 条通检原始输出
+│   ├── 故障定位日志.txt / 修复后日志.txt ← 故障五栏证据
+│   └── e2e-compare.json        ← 两局对照原始结果
 ├── tests/
-│   └── cli.js                  ← 命令行实测入口
+│   ├── cli.js                  ← 命令行实测入口
+│   ├── run-all.js              ← 统一测试入口（10 条断言，失败 exit 1）
+│   └── e2e_run.js              ← 完整一局 + 重开两局对照（需 playwright）
 ├── data/
-│   └── records.json            ← 命令行实测产物样本（网页运行时不读写它）
+│   ├── records.json            ← 命令行实测产物样本（网页运行时不读写它）
+│   └── records.backup.json     ← reset --yes 自动备份
+├── .gitignore / .env.example    ← 密钥排除规则与环境模板
 ├── manifest.webmanifest        ← PWA 清单：可「添加到主屏幕」全屏打开
-├── sw.js                       ← Service Worker：首次访问后断网也能玩
+├── sw.js                       ← Service Worker（缓存名 pixel-survivors-v3）
 ├── icon-192.png / icon-512.png ← 桌面/主屏幕图标
 └── README.md
 ```
@@ -68,7 +75,7 @@ Service Worker 只在 **HTTPS 或 localhost** 下生效。
 
 | 平台 | 移动 | 开火 | 其他 |
 |---|---|---|---|
-| 电脑 | `W A S D` / 方向键 | 自动瞄准最近敌人 | `P` 暂停、`M` 静音、`R` 战绩簿、`T` 重复提交验收、`空格` 开始/重开、`1 2 3` 选强化 |
+| 电脑 | `W A S D` / 方向键 | 自动瞄准最近敌人 | 开局填昵称；`P` 暂停、`M` 静音、`R` 战绩簿、`T` 重复提交验收、`空格` 开始/重开、`1 2 3` 选强化 |
 | 手机 | 左下角虚拟摇杆 | 自动 | 下方按钮：暂停 / 音效 / 全屏 / 战绩簿；升级时点卡片 |
 
 - 红色追击怪贴身扣血；紫色弹幕怪远程扇形开火，**碰到弹幕也扣血**，命中后 0.85 秒无敌帧。
@@ -107,13 +114,21 @@ node tests/cli.js wave 11                    # 返回「未收录」
 
 ---
 
-## 五、更新版本
+## 五、本期完善（v3）
 
-改完 `index.html` 或 `src/record-store.js` 后，把 `sw.js` 第一行缓存名换新的（如 `pixel-survivors-v3`），用户下次打开才会拉到新版本。
+- **真实昵称贯通**：开局前在「昵称」框输入 1–12 位中文/字母/数字/下划线，校验通过后写入 `RunRecord.playerName`，战绩簿新增 NAME 列；输入框聚焦时按空格/回车也能开局。替换了上期「playerName 恒为玩家」的假实现。
+- **删除保护**：`tests/cli.js reset` 未带 `--yes` 返回 `CONFIRM_REQUIRED` 且 exit 1；带 `--yes` 先写 `data/records.backup.json` 再清空。页面「🗑 清空战绩」改为 5 秒内二次确认，并备份到 `localStorage['pixel_survivors_records_backup_v1']`。
+- **工程规范**：新增 `.gitignore`（`.env`、`.env.*`、`!.env.example`）与 `.env.example` 模板。
+- **测试工具**：`node tests/run-all.js`（10 条断言，任一不符 exit 1）；`node tests/e2e_run.js`（需本地 HTTP 站点与 playwright，输出两局时长/得分对照）。
+- **缓存**：`sw.js` 升级为 `pixel-survivors-v3`；覆盖部署后老访客才会拉到新版本。
+
+## 六、更新版本
+
+改完 `index.html` 或 `src/record-store.js` 后，把 `sw.js` 第一行缓存名换新的（如 `pixel-survivors-v4`），用户下次打开才会拉到新版本。
 
 ---
 
-## 六、技术说明
+## 七、技术说明
 
 - 渲染：480×300 低分辨率离屏 Canvas 放大 2 倍 → 像素颗粒感；HUD 用 960×600 清晰层。
 - 自适应：`min(96vw, 960px, (100dvh - 118px) * 1.6)`，横竖屏与安全区都适配。

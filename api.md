@@ -105,6 +105,12 @@ CLI 退出码 `0`；产物追加一行到 `data/records.json`。
 | `TYPE_MISMATCH` | 参数不是合法 JSON、字段类型不符 | `提交失败：参数不是合法 JSON。` |
 | `NOT_FOUND` | `get(runId)` 查不到 | `查询失败：未收录该战绩编号 …，没有找到对应记录。` |
 | `STORAGE_FAILED` | 隐私模式 / 磁盘不可写 | `提交失败：本机存储不可用，战绩未写入，请检查浏览器隐私模式或磁盘权限。` |
+| `CONFIRM_REQUIRED` | `tests/cli.js reset` 未带 `--yes`（本期新增的删除保护） | `清空前需确认：请先确认已备份，再加 --yes 重新执行。` |
+
+> 本期变更：`reset` 改为「未带 `--yes` 一律拒绝并 exit 1」；带 `--yes` 时先写
+> `data/records.backup.json` 再清空。页面「🗑 清空战绩」按钮同样改为 5 秒内二次确认，
+> 并把旧数据备份到 `localStorage['pixel_survivors_records_backup_v1']`。
+> 开局昵称由 `index.html` 的输入框读取，经 `NAME_RE` 校验后才写入 `RunRecord.playerName`。
 
 **失败示例 1：重复提交（页面按 `T`）**
 ```json

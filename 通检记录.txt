@@ -1,0 +1,11 @@
+编号 | 步骤 | 期望 | 实际 | 通过
+T01 | 打开站点/加载模块/查 SW 与 .gitignore（流程第1步） | 全 200、缓存 v3、工程文件在 | {"/":200,"/src/record-store.js":200,"/sw.js":200} v3=true 工程文件=true | true
+T02 | 昵称框输入「测试员01」并聚焦按空格（流程第2步） | 进入 playing 且提示昵称 | playing / 开局成功：昵称「测试员01」将写入本局战绩。 | true
+T03 | 逐波推进至第10波、自动射击、Boss 弹幕（流程第3步） | victory/Boss出现/子弹>0 | {"state":"victory","boss":true,"maxB":4,"maxE":84,"shots":1730} | true
+T04 | 结算自动提交战绩（流程第4步） | ok:true 且 playerName=测试员01 | OK / 测试员01 | true
+T05 | 重开网页按 R 打开战绩簿（流程第5步） | 记录仍在且昵称正确 | {"n":1,"name":"测试员01"} | true
+T06 | 页面按 T 重复提交（失败路径，第4步分支） | DUPLICATE_RUN_ID 且条数不变 | DUPLICATE_RUN_ID / n=1 | true
+T07 | CLI reset 未确认 / 带 --yes（失败路径+备份） | 前者 CONFIRM_REQUIRED、后者备份并清空 | CONFIRM_REQUIRED(exit1) / OK backup=true | true
+T08 | 点「清空战绩」一次 / 5秒内再点 | 首次不清空、二次备份后清空 | n1=1 n2=0 备份=true | true
+T09 | 填非法昵称按回车（失败路径） | 拒绝开局 OUT_OF_RANGE | title / OUT_OF_RANGE | true
+运行时错误：0 条

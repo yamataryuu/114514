@@ -1,0 +1,6 @@
+[DBG] adapter label = localStorage
+[DBG] save = {"ok":true,"code":"OK","hint":"战绩已保存：R20261125130538-4a37，重开网页仍可在「战绩簿」查看。"}
+[DBG] before reload records=1 localStorage=[{"runId":"R20261125130538-4a37","schemaVersion":1,"createdAt":"2026-11-25T13:05:38.523Z","playerName":"玩家","waveReached":10,"result":"victory","kills":1,"level":1,"hpLeft":8,"maxhp":8,"upgrades":[],"durationSec":0,"source":"debug"}]
+[DBG] after reload records=1 localStorage=[{"runId":"R20261125130538-4a37","schemaVersion":1,"createdAt":"2026-11-25T13:05:38.523Z","playerName":"玩家","waveReached":10,"result":"victory","kills":1,"level":1,"hpLeft":8,"maxhp":8,"upgrades":[],"durationSec":0,"source":"debug"}]
+[DBG] adapter label = localStorage
+[DBG] pageerror=0

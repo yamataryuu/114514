@@ -28,7 +28,21 @@ try {
     case 'get':    out = store.get(process.argv[3]); break;
     case 'wave':   out = store.wave(Number(process.argv[3])); break;
     case 'export': out = { ok: true, code: 'OK', path: 'data/records.json', data: JSON.parse(store.exportJSON()) }; break;
-    case 'reset':  store.clear(); out = { ok: true, code: 'OK', hint: '已清空 data/records.json' }; break;
+    case 'reset': {
+      if (process.argv.indexOf('--yes') === -1) {
+        out = { ok: false, code: 'CONFIRM_REQUIRED',
+          hint: '清空前需确认：请先确认已备份，再加 --yes 重新执行。' };
+        break;
+      }
+      const fs = require('fs');
+      const rows = store.list();
+      const backup = path.join(__dirname, '..', 'data', 'records.backup.json');
+      fs.writeFileSync(backup, JSON.stringify(rows, null, 2) + '\n', 'utf8');
+      store.clear();
+      out = { ok: true, code: 'OK', backup: 'data/records.backup.json', count: rows.length,
+        hint: '已备份 ' + rows.length + ' 条到 data/records.backup.json 并清空记录表。' };
+      break;
+    }
     default:       out = { ok: false, code: 'UNKNOWN_VALUE', hint: '未知命令：' + cmd };
   }
 } catch (e) {

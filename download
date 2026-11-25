@@ -1,0 +1,13 @@
+# 环境变量 / 密钥（后续接后端时填写 .env，切勿提交真实值）
+.env
+.env.*
+!.env.example
+
+# 依赖与本机产物
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# 说明：data/records.json 是虚构样例产物，保留在仓库用于验收复现；
+# 若部署时不想公开，可从发布目录移除，不影响网页运行（网页只用 localStorage）。
